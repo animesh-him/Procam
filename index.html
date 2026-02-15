@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pro Camera</title>
+
+<style>
+body{
+margin:0;
+background:black;
+color:white;
+font-family:Arial, Helvetica, sans-serif;
+overflow:hidden;
+}
+
+video, canvas{
+position:absolute;
+width:100%;
+height:100%;
+object-fit:cover;
+}
+
+#ui{
+position:absolute;
+bottom:10px;
+width:100%;
+display:flex;
+flex-wrap:wrap;
+justify-content:center;
+gap:10px;
+background:rgba(0,0,0,0.6);
+padding:10px 0;
+}
+
+.btn{
+width:60px;
+height:60px;
+border-radius:50%;
+background:black;
+border:2px solid white;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:26px;
+cursor:pointer;
+}
+
+.btn:active{
+background:white;
+color:black;
+}
+
+#message{
+position:absolute;
+top:10px;
+width:100%;
+text-align:center;
+font-size:18px;
+}
+
+#credit{
+position:absolute;
+bottom:0;
+width:100%;
+text-align:center;
+font-size:14px;
+font-style:italic;
+padding:5px 0;
+}
+</style>
+</head>
+
+<body>
+
+<div id="message"></div>
+
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+<div class="btn" onclick="toggleFocus()">🎯</div>
+<div class="btn" onclick="toggleBlur()">🌫️</div>
+<div class="btn" onclick="faceBoost()">👤</div>
+<div class="btn" onclick="nightMode()">🌙</div>
+<div class="btn" onclick="landscape()">🌄</div>
+<div class="btn" onclick="cinematic()">🎨</div>
+<div class="btn" onclick="exposure()">🔆</div>
+<div class="btn" onclick="hdr()">⚡</div>
+<div class="btn" onclick="grid()">📏</div>
+<div class="btn" onclick="autoEnhance()">🪄</div>
+<div class="btn" onclick="switchCamera()">🔁</div>
+<div class="btn" onclick="capture()">📸</div>
+</div>
+
+<div id="credit">created by Animesh</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const message = document.getElementById('message');
+
+let stream;
+let facing = "environment";
+let blurLevel = 0;
+let currentFilter = "";
+let segmentation;
+let maskEnabled = false;
+let gridEnabled = false;
+
+async function startCamera(){
+try{
+stream = await navigator.mediaDevices.getUserMedia({
+video:{facingMode:facing},
+audio:false
+});
+video.srcObject = stream;
+}catch(e){
+message.innerText="Camera permission required.";
+}
+}
+
+function stopCamera(){
+if(stream){
+stream.getTracks().forEach(track=>track.stop());
+}
+}
+
+function switchCamera(){
+facing = facing === "environment" ? "user" : "environment";
+stopCamera();
+startCamera();
+}
+
+function draw(){
+canvas.width = video.videoWidth;
+canvas.height = video.videoHeight;
+ctx.filter = currentFilter;
+ctx.drawImage(video,0,0);
+
+if(blurLevel>0){
+ctx.filter="blur("+blurLevel+"px)";
+ctx.drawImage(canvas,0,0);
+ctx.filter=currentFilter;
+}
+
+if(gridEnabled){
+drawGrid();
+}
+
+requestAnimationFrame(draw);
+}
+
+function toggleBlur(){
+blurLevel = blurLevel===0 ? 8 : 0;
+}
+
+function toggleFocus(){
+maskEnabled = !maskEnabled;
+}
+
+function faceBoost(){
+currentFilter="brightness(120%) contrast(110%)";
+}
+
+function nightMode(){
+currentFilter="brightness(150%) contrast(120%)";
+}
+
+function landscape(){
+currentFilter="";
+blurLevel=0;
+}
+
+function cinematic(){
+currentFilter="sepia(30%) contrast(120%) saturate(120%)";
+}
+
+function exposure(){
+currentFilter="brightness(130%)";
+}
+
+function hdr(){
+currentFilter="contrast(140%) saturate(120%)";
+}
+
+function autoEnhance(){
+currentFilter="brightness(110%) contrast(115%) saturate(110%)";
+}
+
+function grid(){
+gridEnabled = !gridEnabled;
+}
+
+function drawGrid(){
+ctx.strokeStyle="white";
+ctx.lineWidth=1;
+for(let i=1;i<3;i++){
+ctx.beginPath();
+ctx.moveTo(canvas.width/3*i,0);
+ctx.lineTo(canvas.width/3*i,canvas.height);
+ctx.stroke();
+
+ctx.beginPath();
+ctx.moveTo(0,canvas.height/3*i);
+ctx.lineTo(canvas.width,canvas.height/3*i);
+ctx.stroke();
+}
+}
+
+function capture(){
+canvas.toBlob(blob=>{
+const link=document.createElement("a");
+link.href=URL.createObjectURL(blob);
+link.download="photo.jpg";
+link.click();
+},"image/jpeg",0.95);
+}
+
+video.addEventListener('play',draw);
+startCamera();
+</script>
+
+</body>
+</html>
