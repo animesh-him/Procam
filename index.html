@@ -22,16 +22,18 @@ object-fit:cover;
 
 #controls{
 position:absolute;
-bottom:20px;
+bottom:15px;
 width:100%;
 display:flex;
 flex-wrap:wrap;
 justify-content:center;
-gap:12px;
+gap:14px;
+background:rgba(0,0,0,0.6);
+padding:10px 0;
 }
 
 .button{
-width:80px;
+width:85px;
 text-align:center;
 cursor:pointer;
 }
@@ -44,32 +46,32 @@ border:2px solid white;
 display:flex;
 align-items:center;
 justify-content:center;
-font-size:28px;
+font-size:26px;
 margin:auto;
 position:relative;
 }
 
 .label{
 font-size:14px;
-margin-top:5px;
+margin-top:6px;
 }
 
 .active .icon{
 background:white;
 color:black;
-box-shadow:0 0 15px white;
+box-shadow:0 0 18px white;
 }
 
 .tick{
 position:absolute;
-top:-5px;
-right:-5px;
+top:-6px;
+right:-6px;
 background:white;
 color:black;
 border-radius:50%;
 width:20px;
 height:20px;
-font-size:14px;
+font-size:13px;
 display:none;
 align-items:center;
 justify-content:center;
@@ -86,6 +88,7 @@ width:100%;
 text-align:center;
 font-style:italic;
 font-size:14px;
+padding:5px 0;
 }
 </style>
 </head>
@@ -97,42 +100,42 @@ font-size:14px;
 
 <div id="controls">
 
-<div class="button" onclick="toggleMode('auto', this)">
+<div class="button" data-mode="auto">
 <div class="icon">🤖<div class="tick">✓</div></div>
 <div class="label">AI Auto</div>
 </div>
 
-<div class="button" onclick="toggleMode('portrait', this)">
+<div class="button" data-mode="portrait">
 <div class="icon">🎯<div class="tick">✓</div></div>
 <div class="label">Portrait</div>
 </div>
 
-<div class="button" onclick="toggleMode('night', this)">
+<div class="button" data-mode="night">
 <div class="icon">🌙<div class="tick">✓</div></div>
 <div class="label">Night</div>
 </div>
 
-<div class="button" onclick="toggleMode('landscape', this)">
+<div class="button" data-mode="landscape">
 <div class="icon">🌄<div class="tick">✓</div></div>
 <div class="label">Landscape</div>
 </div>
 
-<div class="button" onclick="toggleMode('cinema', this)">
+<div class="button" data-mode="cinema">
 <div class="icon">🎨<div class="tick">✓</div></div>
 <div class="label">Cinematic</div>
 </div>
 
-<div class="button" onclick="toggleMode('grid', this)">
+<div class="button" data-mode="grid">
 <div class="icon">📏<div class="tick">✓</div></div>
 <div class="label">Grid</div>
 </div>
 
-<div class="button" onclick="switchCamera()">
+<div class="button" id="switchCam">
 <div class="icon">🔁</div>
 <div class="label">Switch</div>
 </div>
 
-<div class="button" onclick="capture()">
+<div class="button" id="captureBtn">
 <div class="icon">📸</div>
 <div class="label">Capture</div>
 </div>
@@ -141,12 +144,19 @@ font-size:14px;
 
 <div id="credit">created by Animesh</div>
 
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-let modes = {
+let stream;
+let facing="environment";
+let segmentation;
+let segmentationMask=null;
+
+let modes={
 auto:false,
 portrait:false,
 night:false,
@@ -155,51 +165,62 @@ cinema:false,
 grid:false
 };
 
-let facing="environment";
-let stream;
-
 async function startCamera(){
-stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:facing}});
+try{
+stream = await navigator.mediaDevices.getUserMedia({
+video:{facingMode:facing},
+audio:false
+});
 video.srcObject = stream;
+}catch(err){
+alert("Camera permission required.");
+}
 }
 
 function switchCamera(){
 facing = facing==="environment"?"user":"environment";
+if(stream){
 stream.getTracks().forEach(t=>t.stop());
+}
 startCamera();
 }
 
-function toggleMode(mode, element){
+function setupButtons(){
+document.querySelectorAll(".button[data-mode]").forEach(btn=>{
+btn.addEventListener("click",()=>{
+const mode=btn.dataset.mode;
+
 if(mode==="auto"){
 for(let m in modes){modes[m]=false;}
-document.querySelectorAll('.button').forEach(b=>b.classList.remove('active'));
+document.querySelectorAll(".button").forEach(b=>b.classList.remove("active"));
 }
 
-modes[mode] = !modes[mode];
-element.classList.toggle("active");
+modes[mode]=!modes[mode];
+btn.classList.toggle("active");
+});
+});
+
+document.getElementById("switchCam").onclick=switchCamera;
+document.getElementById("captureBtn").onclick=capture;
 }
 
 function applyFilters(){
 let filter="";
 
 if(modes.auto){
-filter="brightness(110%) contrast(115%) saturate(110%)";
-}
-
-if(modes.portrait){
-filter+=" contrast(120%)";
+filter="contrast(120%) brightness(115%) saturate(120%)";
 }
 
 if(modes.night){
-filter+=" brightness(140%)";
+filter+=" brightness(160%) contrast(110%)";
 }
 
 if(modes.landscape){
-filter+=" contrast(130%) saturate(120%)";
+filter+=" contrast(140%) saturate(130%)";
 }
 
 if(modes.cinema){
-filter+=" sepia(25%) contrast(120%)";
+filter+=" sepia(30%) contrast(120%)";
 }
 
 ctx.filter=filter;
@@ -221,12 +242,50 @@ ctx.stroke();
 }
 }
 
+function applyVignette(){
+let g = ctx.createRadialGradient(
+canvas.width/2,
+canvas.height/2,
+canvas.width/4,
+canvas.width/2,
+canvas.height/2,
+canvas.width/1.2
+);
+g.addColorStop(0,"rgba(0,0,0,0)");
+g.addColorStop(1,"rgba(0,0,0,0.6)");
+ctx.fillStyle=g;
+ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
 function render(){
 canvas.width=video.videoWidth;
 canvas.height=video.videoHeight;
 
+ctx.clearRect(0,0,canvas.width,canvas.height);
+
+if(modes.portrait && segmentationMask){
+ctx.save();
+ctx.filter="blur(12px)";
+ctx.drawImage(video,0,0);
+ctx.restore();
+
+ctx.save();
+ctx.globalCompositeOperation="destination-in";
+ctx.drawImage(segmentationMask,0,0,canvas.width,canvas.height);
+ctx.restore();
+
+ctx.globalCompositeOperation="destination-over";
+ctx.drawImage(video,0,0);
+ctx.globalCompositeOperation="source-over";
+
+}else{
 applyFilters();
 ctx.drawImage(video,0,0);
+}
+
+if(modes.cinema){
+applyVignette();
+}
 
 if(modes.grid){
 drawGrid();
@@ -244,9 +303,35 @@ link.click();
 },"image/jpeg",0.95);
 }
 
-video.addEventListener("play", render);
+async function initSegmentation(){
+segmentation = new SelfieSegmentation({
+locateFile:(file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+});
+
+segmentation.setOptions({
+modelSelection:1
+});
+
+segmentation.onResults(results=>{
+segmentationMask=results.segmentationMask;
+});
+}
+
+async function segmentationLoop(){
+if(segmentation){
+await segmentation.send({image:video});
+}
+requestAnimationFrame(segmentationLoop);
+}
+
+video.addEventListener("play",()=>{
+render();
+segmentationLoop();
+});
 
 startCamera();
+initSegmentation();
+setupButtons();
 </script>
 
 </body>
