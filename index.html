@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Pro Camera</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pro AI Camera</title>
 
 <style>
 body{
 margin:0;
 background:black;
 color:white;
-font-family:Arial, Helvetica, sans-serif;
+font-family:Arial, sans-serif;
 overflow:hidden;
 }
 
@@ -20,42 +20,63 @@ height:100%;
 object-fit:cover;
 }
 
-#ui{
+#controls{
 position:absolute;
-bottom:10px;
+bottom:20px;
 width:100%;
 display:flex;
 flex-wrap:wrap;
 justify-content:center;
-gap:10px;
-background:rgba(0,0,0,0.6);
-padding:10px 0;
+gap:12px;
 }
 
-.btn{
+.button{
+width:80px;
+text-align:center;
+cursor:pointer;
+}
+
+.icon{
 width:60px;
 height:60px;
 border-radius:50%;
-background:black;
 border:2px solid white;
 display:flex;
 align-items:center;
 justify-content:center;
-font-size:26px;
-cursor:pointer;
+font-size:28px;
+margin:auto;
+position:relative;
 }
 
-.btn:active{
+.label{
+font-size:14px;
+margin-top:5px;
+}
+
+.active .icon{
 background:white;
 color:black;
+box-shadow:0 0 15px white;
 }
 
-#message{
+.tick{
 position:absolute;
-top:10px;
-width:100%;
-text-align:center;
-font-size:18px;
+top:-5px;
+right:-5px;
+background:white;
+color:black;
+border-radius:50%;
+width:20px;
+height:20px;
+font-size:14px;
+display:none;
+align-items:center;
+justify-content:center;
+}
+
+.active .tick{
+display:flex;
 }
 
 #credit{
@@ -63,135 +84,125 @@ position:absolute;
 bottom:0;
 width:100%;
 text-align:center;
-font-size:14px;
 font-style:italic;
-padding:5px 0;
+font-size:14px;
 }
 </style>
 </head>
 
 <body>
 
-<div id="message"></div>
-
 <video id="video" autoplay playsinline></video>
 <canvas id="canvas"></canvas>
 
-<div id="ui">
-<div class="btn" onclick="toggleFocus()">🎯</div>
-<div class="btn" onclick="toggleBlur()">🌫️</div>
-<div class="btn" onclick="faceBoost()">👤</div>
-<div class="btn" onclick="nightMode()">🌙</div>
-<div class="btn" onclick="landscape()">🌄</div>
-<div class="btn" onclick="cinematic()">🎨</div>
-<div class="btn" onclick="exposure()">🔆</div>
-<div class="btn" onclick="hdr()">⚡</div>
-<div class="btn" onclick="grid()">📏</div>
-<div class="btn" onclick="autoEnhance()">🪄</div>
-<div class="btn" onclick="switchCamera()">🔁</div>
-<div class="btn" onclick="capture()">📸</div>
+<div id="controls">
+
+<div class="button" onclick="toggleMode('auto', this)">
+<div class="icon">🤖<div class="tick">✓</div></div>
+<div class="label">AI Auto</div>
+</div>
+
+<div class="button" onclick="toggleMode('portrait', this)">
+<div class="icon">🎯<div class="tick">✓</div></div>
+<div class="label">Portrait</div>
+</div>
+
+<div class="button" onclick="toggleMode('night', this)">
+<div class="icon">🌙<div class="tick">✓</div></div>
+<div class="label">Night</div>
+</div>
+
+<div class="button" onclick="toggleMode('landscape', this)">
+<div class="icon">🌄<div class="tick">✓</div></div>
+<div class="label">Landscape</div>
+</div>
+
+<div class="button" onclick="toggleMode('cinema', this)">
+<div class="icon">🎨<div class="tick">✓</div></div>
+<div class="label">Cinematic</div>
+</div>
+
+<div class="button" onclick="toggleMode('grid', this)">
+<div class="icon">📏<div class="tick">✓</div></div>
+<div class="label">Grid</div>
+</div>
+
+<div class="button" onclick="switchCamera()">
+<div class="icon">🔁</div>
+<div class="label">Switch</div>
+</div>
+
+<div class="button" onclick="capture()">
+<div class="icon">📸</div>
+<div class="label">Capture</div>
+</div>
+
 </div>
 
 <div id="credit">created by Animesh</div>
-
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
 
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-const message = document.getElementById('message');
 
+let modes = {
+auto:false,
+portrait:false,
+night:false,
+landscape:false,
+cinema:false,
+grid:false
+};
+
+let facing="environment";
 let stream;
-let facing = "environment";
-let blurLevel = 0;
-let currentFilter = "";
-let segmentation;
-let maskEnabled = false;
-let gridEnabled = false;
 
 async function startCamera(){
-try{
-stream = await navigator.mediaDevices.getUserMedia({
-video:{facingMode:facing},
-audio:false
-});
+stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:facing}});
 video.srcObject = stream;
-}catch(e){
-message.innerText="Camera permission required.";
-}
-}
-
-function stopCamera(){
-if(stream){
-stream.getTracks().forEach(track=>track.stop());
-}
 }
 
 function switchCamera(){
-facing = facing === "environment" ? "user" : "environment";
-stopCamera();
+facing = facing==="environment"?"user":"environment";
+stream.getTracks().forEach(t=>t.stop());
 startCamera();
 }
 
-function draw(){
-canvas.width = video.videoWidth;
-canvas.height = video.videoHeight;
-ctx.filter = currentFilter;
-ctx.drawImage(video,0,0);
-
-if(blurLevel>0){
-ctx.filter="blur("+blurLevel+"px)";
-ctx.drawImage(canvas,0,0);
-ctx.filter=currentFilter;
+function toggleMode(mode, element){
+if(mode==="auto"){
+for(let m in modes){modes[m]=false;}
+document.querySelectorAll('.button').forEach(b=>b.classList.remove('active'));
 }
 
-if(gridEnabled){
-drawGrid();
+modes[mode] = !modes[mode];
+element.classList.toggle("active");
 }
 
-requestAnimationFrame(draw);
+function applyFilters(){
+let filter="";
+
+if(modes.auto){
+filter="brightness(110%) contrast(115%) saturate(110%)";
 }
 
-function toggleBlur(){
-blurLevel = blurLevel===0 ? 8 : 0;
+if(modes.portrait){
+filter+=" contrast(120%)";
 }
 
-function toggleFocus(){
-maskEnabled = !maskEnabled;
+if(modes.night){
+filter+=" brightness(140%)";
 }
 
-function faceBoost(){
-currentFilter="brightness(120%) contrast(110%)";
+if(modes.landscape){
+filter+=" contrast(130%) saturate(120%)";
 }
 
-function nightMode(){
-currentFilter="brightness(150%) contrast(120%)";
+if(modes.cinema){
+filter+=" sepia(25%) contrast(120%)";
 }
 
-function landscape(){
-currentFilter="";
-blurLevel=0;
-}
-
-function cinematic(){
-currentFilter="sepia(30%) contrast(120%) saturate(120%)";
-}
-
-function exposure(){
-currentFilter="brightness(130%)";
-}
-
-function hdr(){
-currentFilter="contrast(140%) saturate(120%)";
-}
-
-function autoEnhance(){
-currentFilter="brightness(110%) contrast(115%) saturate(110%)";
-}
-
-function grid(){
-gridEnabled = !gridEnabled;
+ctx.filter=filter;
 }
 
 function drawGrid(){
@@ -210,6 +221,20 @@ ctx.stroke();
 }
 }
 
+function render(){
+canvas.width=video.videoWidth;
+canvas.height=video.videoHeight;
+
+applyFilters();
+ctx.drawImage(video,0,0);
+
+if(modes.grid){
+drawGrid();
+}
+
+requestAnimationFrame(render);
+}
+
 function capture(){
 canvas.toBlob(blob=>{
 const link=document.createElement("a");
@@ -219,7 +244,8 @@ link.click();
 },"image/jpeg",0.95);
 }
 
-video.addEventListener('play',draw);
+video.addEventListener("play", render);
+
 startCamera();
 </script>
 
